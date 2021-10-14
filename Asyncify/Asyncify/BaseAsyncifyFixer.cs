@@ -43,6 +43,7 @@ namespace Asyncify
 
         private async Task<Solution> AsyncifyMethod(Document document, TSyntaxType nodeToFix, CancellationToken cancellationToken)
         {
+            var documentIds = new List<DocumentId>();
             var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
             var syntaxRoot = await document.GetSyntaxRootAsync(cancellationToken);
             
@@ -60,7 +61,7 @@ namespace Asyncify
                 foreach (var matchingMember in matchingMembers)
                 {
                     var interfaceDoc = document.Project.Solution.GetDocument(matchingMember.SyntaxTree);
-                    newSolution = await FixSignatureAndCallers(matchingMember, interfaceDoc, returnTypeSymbol, cancellationToken);
+                    newSolution = await FixSignatureAndCallers(matchingMember, interfaceDoc, returnTypeSymbol, documentIds, cancellationToken);
                 }
 
                 document = newSolution.GetDocument(document.Id);
@@ -72,11 +73,20 @@ namespace Asyncify
                 document = newSolution.GetDocument(document.Id);
                 syntaxRoot = await document.GetSyntaxRootAsync(cancellationToken);
                 method = RefindMethod(method, syntaxRoot);
-                newSolution = await FixSignatureAndCallers(method, document, returnTypeSymbol, cancellationToken);
+                newSolution = await FixSignatureAndCallers(method, document, returnTypeSymbol, documentIds, cancellationToken);
             }
             else
             {
                 syntaxRoot = syntaxRoot.ReplaceNode(method, newMethod);
+                newSolution = document.Project.Solution.WithDocumentSyntaxRoot(document.Id, syntaxRoot);
+            }
+
+            foreach (var id in documentIds.Distinct())
+            {
+                document = newSolution.GetDocument(document.Id);
+                syntaxRoot = await document.GetSyntaxRootAsync(cancellationToken);
+
+                syntaxRoot = EnsureUsing((CompilationUnitSyntax)syntaxRoot, "System.Threading");
                 newSolution = document.Project.Solution.WithDocumentSyntaxRoot(document.Id, syntaxRoot);
             }
 
@@ -109,19 +119,25 @@ namespace Asyncify
             return matchingMembers;
         }
 
-        private static async Task<Solution> FixSignatureAndCallers(MethodDeclarationSyntax method, Document document, ITypeSymbol returnTypeSymbol, CancellationToken cancellationToken)
+        private static async Task<Solution> FixSignatureAndCallers(MethodDeclarationSyntax method, Document document, ITypeSymbol returnTypeSymbol, List<DocumentId> documentIds, CancellationToken cancellationToken)
         {
             var syntaxRoot = await document.GetSyntaxRootAsync(cancellationToken);
             method = RefindMethod(method, syntaxRoot);
 
-            IEnumerable<IGrouping<DocumentId, Location>> callersByDocumentId = 
-                await GetCallerSites(document.Project.Solution, document, method, cancellationToken);
-
+            SyntaxNode syntaxRootBefore = syntaxRoot;
             syntaxRoot = FixMethodSignature(ref method, returnTypeSymbol, syntaxRoot);
+            if (syntaxRoot != syntaxRootBefore)
+            {
+                documentIds.Add(document.Id);
+            }
             
             var newSolution = document.Project.Solution.WithDocumentSyntaxRoot(document.Id, syntaxRoot);
-                
-            newSolution = await FixCallingMembersAsync(newSolution, callersByDocumentId, cancellationToken);
+            document = newSolution.GetDocument(document.Id);
+
+            IEnumerable<IGrouping<DocumentId, Location>> callersByDocumentId =
+                await GetCallerSites(newSolution, document, method, cancellationToken);
+
+            newSolution = await FixCallingMembersAsync(newSolution, callersByDocumentId, documentIds, cancellationToken);
             return newSolution;
         }
 
@@ -134,7 +150,7 @@ namespace Asyncify
             return callersByDocumentId;
         }
 
-        private static async Task<Solution> FixCallingMembersAsync(Solution solution, IEnumerable<IGrouping<DocumentId, Location>> callersByDocumentId, CancellationToken cancellationToken)
+        private static async Task<Solution> FixCallingMembersAsync(Solution solution, IEnumerable<IGrouping<DocumentId, Location>> callersByDocumentId, List<DocumentId> documentIds, CancellationToken cancellationToken)
         {
             foreach (var documentId in callersByDocumentId)
             {
@@ -187,7 +203,12 @@ namespace Asyncify
                         //Check for a lambda, if we're refactoring a lambda, we don't need to update the signature of the method
                         if (lambda == null && !hasOutOrRefParameters)
                         {
+                            var preserveRoot = callerRoot;
                             callerRoot = FixMethodSignature(ref tempMethod, returnTypeSymbols[i], callerRoot);
+                            if (preserveRoot != callerRoot)
+                            {
+                                documentIds.Add(documentId.Key);
+                            }
                         }
 
                         referencesInDocument = callerRoot
@@ -198,7 +219,7 @@ namespace Asyncify
 
                 solution = solution.WithDocumentSyntaxRoot(document.Id, callerRoot);
 
-                solution = await RecurseUpCallTree(solution, referencesInDocument, document, cancellationToken);
+                solution = await RecurseUpCallTree(solution, referencesInDocument, document, documentIds, cancellationToken);
             }
 
             return solution;
@@ -213,7 +234,7 @@ namespace Asyncify
         }
 
         private static async Task<Solution> RecurseUpCallTree(Solution solution, SyntaxNode[] referencesInDocument,
-            Document document, CancellationToken cancellationToken)
+            Document document, List<DocumentId> documentIds, CancellationToken cancellationToken)
         {
             var refactoredMethods = referencesInDocument.Select(x => x.FirstAncestorOrSelf<MethodDeclarationSyntax>()).ToArray();
             foreach (var refactoredMethod in refactoredMethods.Where(x => !x.HasOutOrRefParameters()))
@@ -221,7 +242,7 @@ namespace Asyncify
                 IEnumerable<IGrouping<DocumentId, Location>> callersByDocumentId =
                     await GetCallerSites(solution, solution.GetDocument(document.Id), refactoredMethod, cancellationToken);
 
-                solution = await FixCallingMembersAsync(solution, callersByDocumentId, cancellationToken);
+                solution = await FixCallingMembersAsync(solution, callersByDocumentId, documentIds, cancellationToken);
             }
             return solution;
         }
