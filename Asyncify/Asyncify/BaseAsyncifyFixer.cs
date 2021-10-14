@@ -237,7 +237,7 @@ namespace Asyncify
             return methodSymbol;
         }
 
-        private static ParameterSyntax[] _cancellationToken = ParseParameterList("(CancellationToken cancellationToken = default)").Parameters.ToArray();
+        private static ParameterSyntax[] _cancellationToken = ParseParameterList("(CancellationToken cancellationToken = default(CancellationToken))").Parameters.ToArray();
 
         private static SyntaxNode FixMethodSignature(ref MethodDeclarationSyntax method, ITypeSymbol returnTypeSymbol, SyntaxNode syntaxRoot)
         {

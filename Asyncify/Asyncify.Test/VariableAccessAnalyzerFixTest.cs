@@ -10,7 +10,7 @@ namespace Asyncify.Test
         [TestMethod]
         public void CanFindMethodNotUsingTapWithVariable()
         {
-            var expected = GetResultWithLocation(11, 22);
+            var expected = GetResultWithLocation(12, 22);
             VerifyCodeWithReturn(@"
     public void Test()
     {
@@ -23,7 +23,7 @@ namespace Asyncify.Test
         var temp = CallAsync();
         var result = temp.Result;
     }", @"
-    public async System.Threading.Tasks.Task Test()
+    public async Task Test(CancellationToken cancellationToken = default(CancellationToken))
     {
         var temp = CallAsync();
         var result = await temp;
@@ -32,7 +32,7 @@ namespace Asyncify.Test
         [TestMethod]
         public void WillWrapVariableInParenthesesIfNeeded()
         {
-            var expected = GetResultWithLocation(11, 22);
+            var expected = GetResultWithLocation(12, 22);
             VerifyCodeWithReturn(@"
     public void Test()
     {
@@ -45,7 +45,7 @@ namespace Asyncify.Test
         var temp = CallAsync();
         var result = temp.Result.ToString();
     }", @"
-    public async System.Threading.Tasks.Task Test()
+    public async Task Test(CancellationToken cancellationToken = default(CancellationToken))
     {
         var temp = CallAsync();
         var result = (await temp).ToString();
@@ -55,7 +55,7 @@ namespace Asyncify.Test
         [TestMethod]
         public void CanFindViolationInMethodUsingTap()
         {
-            var expected = GetResultWithLocation(11, 22);
+            var expected = GetResultWithLocation(12, 22);
             VerifyCodeWithReturn(@"
     public async Task Test()
     {
@@ -117,13 +117,13 @@ namespace Asyncify.Test
         };
 
         outVariable = string.Empty;
-    }", GetResultWithLocation(13, 26));
+    }", GetResultWithLocation(14, 26));
         }
 
         [TestMethod]
         public void CanFindMethodNotUsingTapWithVariableInBraces()
         {
-            var expected = GetResultWithLocation(11, 22);
+            var expected = GetResultWithLocation(12, 22);
             VerifyCodeWithReturn(@"
     public void Test()
     {
@@ -136,7 +136,7 @@ namespace Asyncify.Test
         var temp = CallAsync();
         var result = ((Task<int>)temp).Result;
     }", @"
-    public async System.Threading.Tasks.Task Test()
+    public async Task Test(CancellationToken cancellationToken = default(CancellationToken))
     {
         var temp = CallAsync();
         var result = await ((Task<int>)temp);

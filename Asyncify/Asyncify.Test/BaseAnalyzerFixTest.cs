@@ -8,29 +8,30 @@ namespace Asyncify.Test
 
         protected static readonly DiagnosticResult[] EmptyExpectedResults = new DiagnosticResult[0];
         protected const string AsyncTaskOfTMethod = @"
-    public async Task<int> CallAsync()
+    public async Task<int> CallAsync(CancellationToken cancellationToken = default(CancellationToken))
     {
         await Task.Delay(1000);
         return 0;
     }";
         protected const string AsyncTaskMethod = @"
-    public async Task CallAsync()
+    public async Task CallAsync(CancellationToken cancellationToken = default(CancellationToken))
     {
         await Task.Delay(1000);
     }";
         protected const string SyncTaskOfTMethod = @"
-    public Task<int> CallAsync()
+    public Task<int> CallAsync(CancellationToken cancellationToken = default(CancellationToken))
     {
         return Task.FromResult(0);
     }";
         protected const string SyncTaskMethod = @"
-    public Task CallAsync()
+    public Task CallAsync(CancellationToken cancellationToken = default(CancellationToken))
     {
         return Task.FromResult(0);
     }";
 
         protected const string FormatCode = @"
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 public class TapTest
@@ -42,7 +43,13 @@ public class TapTest
 
 public class AsyncClass
 {{
-    public async Task<int> Call()
+
+    public int Call()
+    {{
+        return 0;
+    }}
+
+    public async Task<int> CallAsync(CancellationToken cancellationToken = default(CancellationToken))
     {{
         await Task.Delay(100);
         return 0;
