@@ -54,16 +54,16 @@ namespace Asyncify.Test
     public void Test()
     {
         var result = CallAsync().Result;
-    }", GetResultWithLocation(10, 22));
+    }", GetResultWithLocation(11, 22));
             VerifyCodeFixWithReturn(@"
     public void Test()
     {
         var result = CallAsync().Result;
     }", @"
-    public async System.Threading.Tasks.Task Test()
+    public async Task Test(CancellationToken cancellationToken = default(CancellationToken))
     {
-        var result = await CallAsync();
-    }", GetResultWithLocation(10, 22));
+        var result = await CallAsync(cancellationToken);
+    }", GetResultWithLocation(11, 22));
         }
 
         [TestMethod]
@@ -74,7 +74,7 @@ namespace Asyncify.Test
     {
         var temp = await CallAsync();
         var result = CallAsync().Result;
-    }", GetResultWithLocation(11, 22));
+    }", GetResultWithLocation(12, 22));
         }
 
         [TestMethod]
@@ -97,7 +97,7 @@ namespace Asyncify.Test
         CallAsync().Wait();
     }", EmptyExpectedResults);
         }
-
+        
         [TestMethod]
         public void CanFindMethodWhenUsingBraces()
         {
@@ -105,110 +105,108 @@ namespace Asyncify.Test
     public void Test()
     {
         var result = (CallAsync()).Result;
-    }", GetResultWithLocation(10, 23));
+    }", GetResultWithLocation(11, 23));
             VerifyCodeFixWithReturn(@"
     public void Test()
     {
         var result = (CallAsync()).Result;
     }", @"
-    public async System.Threading.Tasks.Task Test()
+    public async Task Test(CancellationToken cancellationToken = default(CancellationToken))
     {
-        var result = (await CallAsync());
-    }", GetResultWithLocation(10, 23));
+        var result = await CallAsync(cancellationToken);
+    }", GetResultWithLocation(11, 23));
         }
 
         [TestMethod]
         public void NoViolationOnAsyncMethodsWrappedInVoidCall()
         {
             VerifyCSharpDiagnostic(string.Format(FormatCode, @"
-public void FirstLevelUp()
-{
-    Test().Wait();
-}
+    public void FirstLevelUp()
+    {
+        Test().Wait();
+    }
 
-public Task Test()
-{
-    return Task.FromResult(0);
-}", string.Empty), EmptyExpectedResults);
+    public Task Test()
+    {
+        return Task.FromResult(0);
+    }", string.Empty), EmptyExpectedResults);
         }
 
         [TestMethod]
         public void FixIsAppliedUpCallTree()
         {
             var oldSource = string.Format(FormatCode, @"
-public int SecondLevelUp()
-{
-    return FirstLevelUp();
-}
+    public int SecondLevelUp()
+    {
+        return FirstLevelUp();
+    }
 
-public int FirstLevelUp()
-{
-    return Test();
-}
+    public int FirstLevelUp()
+    {
+        return Test();
+    }
 
-public int Test()
-{
-    var test = new AsyncClass();
-    return test.Call().Result;
-}", string.Empty);
+    public int Test()
+    {
+        var test = new AsyncClass();
+        return test.CallAsync().Result;
+    }", string.Empty);
             var newSource = string.Format(FormatCode, @"
-public async System.Threading.Tasks.Task<int> SecondLevelUp()
-{
-    return await FirstLevelUp();
-}
+    public async Task<int> SecondLevelUp(CancellationToken cancellationToken = default(CancellationToken))
+    {
+        return await FirstLevelUp(cancellationToken);
+    }
 
-public async System.Threading.Tasks.Task<int> FirstLevelUp()
-{
-    return await Test();
-}
+    public async Task<int> FirstLevelUp(CancellationToken cancellationToken = default(CancellationToken))
+    {
+        return await Test(cancellationToken);
+    }
 
-public async System.Threading.Tasks.Task<int> Test()
-{
-    var test = new AsyncClass();
-    return await test.Call();
-}", string.Empty);
+    public async Task<int> Test(CancellationToken cancellationToken = default(CancellationToken))
+    {
+        var test = new AsyncClass();
+        return await test.CallAsync(cancellationToken);
+    }", string.Empty);
             VerifyCSharpFix(oldSource, newSource);
         }
-
-
 
         [TestMethod]
         public void FixIsAppliedUpCallTreeStopsAtOutRefParams()
         {
             var oldSource = string.Format(FormatCode, @"
-public int SecondLevelUp(out string test)
-{
-    test = string.Empty;
-    return FirstLevelUp();
-}
+    public int SecondLevelUp(out string test)
+    {
+        test = string.Empty;
+        return FirstLevelUp();
+    }
 
-public int FirstLevelUp()
-{
-    return Test();
-}
+    public int FirstLevelUp()
+    {
+        return Test();
+    }
 
-public int Test()
-{
-    var test = new AsyncClass();
-    return test.Call().Result;
-}", string.Empty);
+    public int Test()
+    {
+        var test = new AsyncClass();
+        return test.CallAsync().Result;
+    }", string.Empty);
             var newSource = string.Format(FormatCode, @"
-public int SecondLevelUp(out string test)
-{
-    test = string.Empty;
-    return FirstLevelUp().Result;
-}
+    public int SecondLevelUp(out string test)
+    {
+        test = string.Empty;
+        return FirstLevelUp().Result;
+    }
 
-public async System.Threading.Tasks.Task<int> FirstLevelUp()
-{
-    return await Test();
-}
+    public async Task<int> FirstLevelUp(CancellationToken cancellationToken = default(CancellationToken))
+    {
+        return await Test(cancellationToken);
+    }
 
-public async System.Threading.Tasks.Task<int> Test()
-{
-    var test = new AsyncClass();
-    return await test.Call();
-}", string.Empty);
+    public async Task<int> Test(CancellationToken cancellationToken = default(CancellationToken))
+    {
+        var test = new AsyncClass();
+        return await test.CallAsync(cancellationToken);
+    }", string.Empty);
             VerifyCSharpFix(oldSource, newSource);
         }
 
@@ -216,17 +214,17 @@ public async System.Threading.Tasks.Task<int> Test()
         public void TestCodeFixWithReturnType()
         {
             var oldSource = string.Format(FormatCode, @"
-public int Test()
-{
-    var test = new AsyncClass();
-    return test.Call().Result;
-}", string.Empty);
+    public int Test()
+    {
+        var test = new AsyncClass();
+        return test.CallAsync().Result;
+    }", string.Empty);
             var newSource = string.Format(FormatCode, @"
-public async System.Threading.Tasks.Task<int> Test()
-{
-    var test = new AsyncClass();
-    return await test.Call();
-}", string.Empty);
+    public async Task<int> Test(CancellationToken cancellationToken = default(CancellationToken))
+    {
+        var test = new AsyncClass();
+        return await test.CallAsync(cancellationToken);
+    }", string.Empty);
             VerifyCSharpFix(oldSource, newSource);
         }
 
@@ -234,63 +232,65 @@ public async System.Threading.Tasks.Task<int> Test()
         public void TestCodeFixWithInstanceCall()
         {
             var oldSource = string.Format(FormatCode, @"
-public void Test()
-{
-    var test = new AsyncClass();
-    var result = test.Call().Result;
-}", string.Empty);
+    public void Test()
+    {
+        var test = new AsyncClass();
+        var result = test.CallAsync().Result;
+    }", string.Empty);
             var newSource = string.Format(FormatCode, @"
-public async System.Threading.Tasks.Task Test()
-{
-    var test = new AsyncClass();
-    var result = await test.Call();
-}", string.Empty);
+    public async Task Test(CancellationToken cancellationToken = default(CancellationToken))
+    {
+        var test = new AsyncClass();
+        var result = await test.CallAsync(cancellationToken);
+    }", string.Empty);
             VerifyCSharpFix(oldSource, newSource);
         }
 
+        // [damancia] - Looks like a regression, we currently are trying to convert FromResult->FromResultAsync
         [TestMethod]
         public void TestCodeFixWithinLambda()
         {
             var oldSource = string.Format(FormatCode, @"
-public void Test()
-{
-    int[] bla = null;
-    bla.Select(x => Task.FromResult(100).Result);
-}", string.Empty);
+    public void Test()
+    {
+        int[] bla = null;
+        bla.Select(x => Task.FromResult(100).Result);
+    }", string.Empty);
             var newSource = string.Format(FormatCode, @"
-public void Test()
-{
-    int[] bla = null;
-    bla.Select(async x => await Task.FromResult(100));
-}", string.Empty);
+    public void Test()
+    {
+        int[] bla = null;
+        bla.Select(async x => await Task.FromResult(100));
+    }", string.Empty);
             VerifyCSharpFix(oldSource, newSource);
         }
 
+        // [damancia] - Not sure about this failure.
         [TestMethod]
         public void TestCodeFixWithinParenthesizedLambda()
         {
             var oldSource = string.Format(FormatCode, @"
-public void Test()
-{
-    System.Action a = () => CallAsync();
-}
+    public void Test()
+    {
+        System.Action a = () => CallAsync();
+    }
 
-public int CallAsync()
-{
-    return Task.FromResult(0).Result;
-}
-", string.Empty);
+    public int CallAsync()
+    {
+        return Task.FromResult(0).Result;
+    }
+    ", string.Empty);
             var newSource = string.Format(FormatCode, @"
-public void Test()
-{
-    System.Action a = async () => await CallAsync();
-}
+    public void Test()
+    {
+        System.Action a = async () => await CallAsync();
+    }
 
-public async System.Threading.Tasks.Task<int> CallAsync()
-{
-    return await Task.FromResult(0);
-}
-", string.Empty);
+    public async Task<int> CallAsync()
+    {
+        return await Task.FromResult(0);
+    }
+    ", string.Empty);
             VerifyCSharpFix(oldSource, newSource);
         }
 
@@ -298,17 +298,17 @@ public async System.Threading.Tasks.Task<int> CallAsync()
         public void FixWillWrapInParenthesesIfNeeded()
         {
             var oldSource = string.Format(FormatCode, @"
-public void Test()
-{
-    var test = new AsyncClass();
-    var result = test.Call().Result.ToString();
-}", string.Empty);
+    public void Test()
+    {
+        var test = new AsyncClass();
+        var result = test.CallAsync().Result.ToString();
+    }", string.Empty);
             var newSource = string.Format(FormatCode, @"
-public async System.Threading.Tasks.Task Test()
-{
-    var test = new AsyncClass();
-    var result = (await test.Call()).ToString();
-}", string.Empty);
+    public async Task Test(CancellationToken cancellationToken = default(CancellationToken))
+    {
+        var test = new AsyncClass();
+        var result = (await test.CallAsync(cancellationToken)).ToString();
+    }", string.Empty);
             VerifyCSharpFix(oldSource, newSource);
         }
 
@@ -316,34 +316,36 @@ public async System.Threading.Tasks.Task Test()
         public void WillAddAsyncToVoidMethodInCodefix()
         {
             var oldSource = string.Format(FormatCode, @"
-public void VoidCallingMethod()
-{
-    Test();
-}
+    public void VoidCallingMethod()
+    {
+        Test();
+    }
 
-public void Test()
-{
-    var test = new AsyncClass();
-    var result = test.Call().Result;
-}", string.Empty);
+    public void Test()
+    {
+        var test = new AsyncClass();
+        var result = test.CallAsync().Result;
+    }", string.Empty);
             var newSource = string.Format(FormatCode, @"
-public async System.Threading.Tasks.Task VoidCallingMethod()
-{
-        await Test();
-}
+    public async Task VoidCallingMethod(CancellationToken cancellationToken = default(CancellationToken))
+    {
+        await Test(cancellationToken);
+    }
 
-public async System.Threading.Tasks.Task Test()
-{
-    var test = new AsyncClass();
-    var result = await test.Call();
-}", string.Empty);
+    public async Task Test(CancellationToken cancellationToken = default(CancellationToken))
+    {
+        var test = new AsyncClass();
+        var result = await test.CallAsync(cancellationToken);
+    }", string.Empty);
             VerifyCSharpFix(oldSource, newSource);
         }
         
+        // [damancia] - Regression, not sure what the correct behavior here should be
         [TestMethod]
         public void TestRefactoringOverInterfaces()
         {
             VerifyCSharpFix(@"
+using System.Threading;
 using System.Threading.Tasks;
 
 public class ConsumingClass
@@ -367,17 +369,18 @@ public class DerivedClass : IInterface
         return AsyncMethod().Result;
     }
 
-    public Task<int> AsyncMethod()
+    public Task<int> AsyncMethod(CancellationToken cancellationToken = default(CancellationToken))
     {
         return Task.FromResult(0);
     }
 }
 ", @"
+using System.Threading;
 using System.Threading.Tasks;
 
 public class ConsumingClass
 {
-    public async System.Threading.Tasks.Task<int> Test(IInterface i)
+    public async Task<int> Test(IInterface i)
     {
         return await i.Call();
     }
@@ -385,18 +388,18 @@ public class ConsumingClass
 
 public interface IInterface
 {
-System.Threading.Tasks.Task<int> Call();
+    Task<int> Call(CancellationToken cancellationToken = default(CancellationToken)));
 }
 
 
 public class DerivedClass : IInterface
 {
-    public async System.Threading.Tasks.Task<int> Call()
+    public async Task<int> Call(CancellationToken cancellationToken = default(CancellationToken))
     {
-        return await AsyncMethod();
+        return await AsyncMethod(cancellationToken);
     }
 
-    public Task<int> AsyncMethod()
+    public Task<int> AsyncMethod(CancellationToken cancellationToken = default(CancellationToken))
     {
         return Task.FromResult(0);
     }
