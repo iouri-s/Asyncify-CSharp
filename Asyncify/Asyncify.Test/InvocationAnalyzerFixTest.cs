@@ -98,7 +98,6 @@ namespace Asyncify.Test
     }", EmptyExpectedResults);
         }
         
-        // [damancia] - Currently we are not handling parenthesis correctly
         [TestMethod]
         public void CanFindMethodWhenUsingBraces()
         {
@@ -114,7 +113,7 @@ namespace Asyncify.Test
     }", @"
     public async Task Test(CancellationToken cancellationToken = default(CancellationToken))
     {
-        var result = (await CallAsync());
+        var result = await CallAsync(cancellationToken);
     }", GetResultWithLocation(11, 23));
         }
 
@@ -295,7 +294,6 @@ namespace Asyncify.Test
             VerifyCSharpFix(oldSource, newSource);
         }
 
-        // [damancia] - Currently failing to wrap the await with parenthesis
         [TestMethod]
         public void FixWillWrapInParenthesesIfNeeded()
         {
@@ -371,7 +369,7 @@ public class DerivedClass : IInterface
         return AsyncMethod().Result;
     }
 
-    public Task<int> AsyncMethod()
+    public Task<int> AsyncMethod(CancellationToken cancellationToken = default(CancellationToken))
     {
         return Task.FromResult(0);
     }
@@ -401,7 +399,7 @@ public class DerivedClass : IInterface
         return await AsyncMethod(cancellationToken);
     }
 
-    public Task<int> AsyncMethod()
+    public Task<int> AsyncMethod(CancellationToken cancellationToken = default(CancellationToken))
     {
         return Task.FromResult(0);
     }

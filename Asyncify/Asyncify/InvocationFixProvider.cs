@@ -53,13 +53,28 @@ namespace Asyncify
                     //    }
                     //}
 
+                    // Surrounds the expression with parenthesis
+                    newNode = memberAccess.Expression.ReplaceNode(oldNode, newNode);
+                    if (memberAccess.Parent is MemberAccessExpressionSyntax)
+                    {
+                        newNode = ParenthesizedExpression((ExpressionSyntax)newNode);
+                    }
+
                     oldNode = memberAccess;
+                }
+                else if (identifierName != null)
+                {
+                    break;
                 }
                 else if (node is InvocationExpressionSyntax invocationExpression)
                 {
                     oldNode = invocationExpression;
                 }
-                else 
+                else if (node is ParenthesizedExpressionSyntax parenthesizedExpression)
+                {
+                    oldNode = parenthesizedExpression;
+                }
+                else
                 {
                     break;
                 }
